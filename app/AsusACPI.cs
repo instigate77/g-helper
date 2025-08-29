@@ -1,4 +1,4 @@
-﻿using GHelper;
+using GHelper;
 using GHelper.USB;
 using System.Management;
 using System.Runtime.InteropServices;
@@ -881,9 +881,11 @@ public class AsusACPI
 
         int modeValue = mode switch
         {
-            PerfMode.Balanced => 1,
-            PerfMode.Turbo => 2,
-            PerfMode.Silent => 3,
+            // Align with ASUS/Armoury Crate convention and Linux asus-nb-wmi:
+            // 0 = Balanced, 1 = Turbo, 2 = Silent
+            PerfMode.Balanced => 0,
+            PerfMode.Turbo => 1,
+            PerfMode.Silent => 2,
             _ => 1
         };
 

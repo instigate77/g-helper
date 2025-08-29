@@ -11,7 +11,10 @@ using Microsoft.Win32;
 using Ryzen;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using static NativeMethods;
 
 namespace GHelper
@@ -40,33 +43,40 @@ namespace GHelper
 
         private static PowerLineStatus isPlugged = SystemInformation.PowerStatus.PowerLineStatus;
 
+        private static TcpListener? ipcListener;
+        private static CancellationTokenSource? ipcCancellationToken;
+        private const int IPC_PORT = 12345;
+
         // The main entry point for the application
         public static void Main(string[] args)
         {
+            // Logging flags: default ON; -nolog to disable; -log to enable
+            try
+            {
+                foreach (var a in args)
+                {
+                    var al = a?.ToLowerInvariant();
+                    if (al == "-nolog") Logger.Enabled = false;
+                    else if (al == "-log") Logger.Enabled = true;
+                }
+            }
+            catch { }
 
             // CLI: g-helper.exe -mode turbo|performance|silent
+            // Check if another instance is running and send command via IPC
             if (args.Length == 2 && args[0].Equals("-mode", StringComparison.OrdinalIgnoreCase))
             {
                 var modeArg = args[1].ToLower();
-                PerfMode mode;
-                switch (modeArg)
+                if (TrySendModeCommand(modeArg))
                 {
-                    case "turbo":
-                        mode = PerfMode.Turbo;
-                        break;
-                    case "performance":
-                        mode = PerfMode.Balanced;
-                        break;
-                    case "silent":
-                        mode = PerfMode.Silent;
-                        break;
-                    default:
-                        Console.WriteLine("Invalid mode. Use: turbo, performance, or silent.");
-                        return;
+                    Console.WriteLine($"Sent mode command '{modeArg}' to running G-Helper instance.");
+                    return; // Exit after sending command to running instance
                 }
-                AsusACPI.SetPerformanceMode(mode);
-                Console.WriteLine($"Set mode to {modeArg}.");
-                return; // Exit after setting mode
+                else
+                {
+                    // No running instance found, continue with normal startup and set mode
+                    Console.WriteLine($"No running G-Helper instance found. Starting G-Helper and setting mode to {modeArg}.");
+                }
             }
 
             string action = "";
@@ -162,10 +172,7 @@ namespace GHelper
             Task task = Task.Run((Action)PeripheralsProvider.DetectAllAsusMice);
             PeripheralsProvider.RegisterForDeviceEvents();
 
-            if (Environment.CurrentDirectory.Trim('\\') == Application.StartupPath.Trim('\\') || action.Length > 0)
-            {
-                SettingsToggle(false);
-            }
+            // Do not show the settings UI at startup; start to tray only.
 
             switch (action)
             {
@@ -203,6 +210,16 @@ namespace GHelper
                 default:
                     Startup.StartupCheck();
                     break;
+            }
+
+            // Start IPC listener for mode commands
+            StartIPCListener();
+
+            // Handle CLI mode argument for initial startup
+            if (args.Length == 2 && args[0].Equals("-mode", StringComparison.OrdinalIgnoreCase))
+            {
+                var modeArg = args[1].ToLower();
+                HandleModeCommand(modeArg);
             }
 
             Application.Run();
@@ -390,6 +407,9 @@ namespace GHelper
                 trayIcon.Dispose();
             }
 
+            // Stop IPC listener
+            StopIPCListener();
+
             PeripheralsProvider.UnregisterForDeviceEvents();
             clamshellControl.UnregisterDisplayEvents();
             NativeMethods.UnregisterPowerSettingNotification(unRegPowerNotify);
@@ -415,6 +435,174 @@ namespace GHelper
             catch (Exception ex)
             {
                 Logger.WriteLine("Startup Battery Limit Error: " + ex.Message);
+            }
+        }
+
+        // IPC Methods for Dynamic Mode Switching
+        private static void StartIPCListener()
+        {
+            try
+            {
+                ipcCancellationToken = new CancellationTokenSource();
+                ipcListener = new TcpListener(IPAddress.Loopback, IPC_PORT);
+                ipcListener.Start();
+                Logger.WriteLine($"IPC listener started on port {IPC_PORT}");
+
+                Task.Run(async () =>
+                {
+                    while (!ipcCancellationToken.Token.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            var client = await ipcListener.AcceptTcpClientAsync();
+                            _ = Task.Run(() => HandleIPCClient(client), ipcCancellationToken.Token);
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // Listener was stopped
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.WriteLine($"IPC listener error: {ex.Message}");
+                        }
+                    }
+                }, ipcCancellationToken.Token);
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"Failed to start IPC listener: {ex.Message}");
+            }
+        }
+
+        private static void StopIPCListener()
+        {
+            try
+            {
+                ipcCancellationToken?.Cancel();
+                ipcListener?.Stop();
+                Logger.WriteLine("IPC listener stopped");
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"Error stopping IPC listener: {ex.Message}");
+            }
+        }
+
+        private static async void HandleIPCClient(TcpClient client)
+        {
+            try
+            {
+                using (client)
+                using (var stream = client.GetStream())
+                using (var reader = new StreamReader(stream, Encoding.UTF8))
+                using (var writer = new StreamWriter(stream, Encoding.UTF8))
+                {
+                    var command = await reader.ReadLineAsync();
+                    Logger.WriteLine($"Received IPC command: {command}");
+
+                    if (!string.IsNullOrEmpty(command) && command.StartsWith("mode:"))
+                    {
+                        var modeArg = command.Substring(5).ToLower();
+                        var success = HandleModeCommand(modeArg);
+                        
+                        await writer.WriteLineAsync(success ? "OK" : "ERROR");
+                        await writer.FlushAsync();
+                    }
+                    else
+                    {
+                        await writer.WriteLineAsync("ERROR: Invalid command");
+                        await writer.FlushAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"IPC client handling error: {ex.Message}");
+            }
+        }
+
+        private static bool TrySendModeCommand(string modeArg)
+        {
+            try
+            {
+                using (var client = new TcpClient())
+                {
+                    var connectTask = client.ConnectAsync(IPAddress.Loopback, IPC_PORT);
+                    if (!connectTask.Wait(2000))
+                    {
+                        return false; // Connection timeout
+                    }
+
+                    using (var stream = client.GetStream())
+                    using (var writer = new StreamWriter(stream, Encoding.UTF8))
+                    using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    {
+                        writer.WriteLine($"mode:{modeArg}");
+                        writer.Flush();
+
+                        var response = reader.ReadLine();
+                        return response == "OK";
+                    }
+                }
+            }
+            catch
+            {
+                return false; // No running instance found
+            }
+        }
+
+        private static bool HandleModeCommand(string modeArg)
+        {
+            try
+            {
+                PerfMode mode;
+                int modeIndex;
+                
+                switch (modeArg)
+                {
+                    case "turbo":
+                        mode = PerfMode.Turbo;
+                        modeIndex = 1;
+                        break;
+                    case "performance":
+                        mode = PerfMode.Balanced;
+                        modeIndex = 0;
+                        break;
+                    case "silent":
+                        mode = PerfMode.Silent;
+                        modeIndex = 2;
+                        break;
+                    default:
+                        Logger.WriteLine($"Invalid mode: {modeArg}");
+                        return false;
+                }
+
+                // Set the performance mode using ACPI
+                AsusACPI.SetPerformanceMode(mode);
+                
+                // Update the UI and tray on the main thread
+                if (settingsForm.InvokeRequired)
+                {
+                    settingsForm.Invoke(new Action(() =>
+                    {
+                        modeControl.SetPerformanceMode(modeIndex, true);
+                        settingsForm.VisualiseIcon();
+                    }));
+                }
+                else
+                {
+                    modeControl.SetPerformanceMode(modeIndex, true);
+                    settingsForm.VisualiseIcon();
+                }
+
+                Logger.WriteLine($"Successfully set mode to {modeArg}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine($"Error setting mode to {modeArg}: {ex.Message}");
+                return false;
             }
         }
 

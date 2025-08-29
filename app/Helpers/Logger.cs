@@ -1,12 +1,14 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 public static class Logger
 {
+    public static bool Enabled = true;
     public static string appPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + "\\GHelper";
     public static string logFile = appPath + "\\log.txt";
 
     public static void WriteLine(string logMessage)
     {
+        if (!Enabled) return;
         Debug.WriteLine(logMessage);
         if (!Directory.Exists(appPath)) Directory.CreateDirectory(appPath);
 
