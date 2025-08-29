@@ -215,6 +215,9 @@ namespace GHelper
             // Start IPC listener for mode commands
             StartIPCListener();
 
+            // Start background process-based auto mode watcher
+            try { ProcessModeService.Start(); } catch { }
+
             // Handle CLI mode argument for initial startup
             if (args.Length == 2 && args[0].Equals("-mode", StringComparison.OrdinalIgnoreCase))
             {
@@ -409,6 +412,9 @@ namespace GHelper
 
             // Stop IPC listener
             StopIPCListener();
+
+            // Stop background process watcher
+            try { ProcessModeService.Stop(); } catch { }
 
             PeripheralsProvider.UnregisterForDeviceEvents();
             clamshellControl.UnregisterDisplayEvents();

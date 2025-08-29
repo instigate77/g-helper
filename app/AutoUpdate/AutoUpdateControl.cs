@@ -1,4 +1,4 @@
-﻿using GHelper.Helpers;
+using GHelper.Helpers;
 using System.Diagnostics;
 using System.Net;
 using System.Reflection;
@@ -12,6 +12,10 @@ namespace GHelper.AutoUpdate
 
         SettingsForm settings;
 
+        // Development/build suffix for display version. Example values: ".d1", ".d2", "" (empty to disable)
+        // Bump this when making iterative local changes you want reflected in the UI.
+        private const string DevSuffix = ".d6";
+
         public string versionUrl = "http://github.com/seerge/g-helper/releases";
         static long lastUpdate;
 
@@ -19,7 +23,8 @@ namespace GHelper.AutoUpdate
         {
             settings = settingsForm;
             var appVersion = new Version(Assembly.GetExecutingAssembly().GetName().Version.ToString());
-            settings.SetVersionLabel(Properties.Strings.VersionLabel + $": {appVersion.Major}.{appVersion.Minor}.{appVersion.Build}");
+            var displayVersion = $"{appVersion.Major}.{appVersion.Minor}.{appVersion.Build}{DevSuffix}";
+            settings.SetVersionLabel(Properties.Strings.VersionLabel + $": {displayVersion}");
         }
 
         public void CheckForUpdates()

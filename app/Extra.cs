@@ -1,4 +1,4 @@
-﻿using GHelper.Display;
+using GHelper.Display;
 using GHelper.Gpu.AMD;
 using GHelper.Helpers;
 using GHelper.Input;
@@ -6,6 +6,7 @@ using GHelper.Mode;
 using GHelper.UI;
 using GHelper.USB;
 using System.Diagnostics;
+using System.Linq;
 
 namespace GHelper
 {
@@ -15,6 +16,19 @@ namespace GHelper
         ClamshellModeControl clamshellControl = new ClamshellModeControl();
 
         const string EMPTY = "--------------";
+
+        // Process-based auto mode UI controls
+        private Panel panelProcessAuto = new Panel();
+        private Label labelProcessAuto = new Label();
+        private CheckBox checkProcessAutoEnable = new CheckBox();
+        private Label labelProcSilent = new Label();
+        private Label labelProcPerf = new Label();
+        private Label labelProcTurbo = new Label();
+        private TextBox textProcSilent = new TextBox();
+        private TextBox textProcPerf = new TextBox();
+        private TextBox textProcTurbo = new TextBox();
+        private Button buttonProcSave = new Button();
+        private Button buttonProcDefaults = new Button();
 
 
         private void SetKeyCombo(ComboBox combo, TextBox txbox, string name)
@@ -46,6 +60,7 @@ namespace GHelper
                 customActions.Add("screenpad_down", Properties.Strings.ScreenPadDown);
                 customActions.Add("screenpad_up", Properties.Strings.ScreenPadUp);
             }
+
 
             if (AppConfig.IsAlly())
             {
@@ -478,6 +493,17 @@ namespace GHelper
 
             InitACPITesting();
 
+            // Initialize Process-based Auto Mode UI (placed at the bottom of the Extra form)
+            InitProcessAutoPanel();
+
+            // User preference: hide GPU Apps toggle and Laptop Screen/Keyboard backlight sections
+            try
+            {
+                checkGpuApps.Visible = false;
+                panelBacklightHeader.Visible = false;
+                panelBacklight.Visible = false;
+            }
+            catch { }
         }
 
         private void CheckOptimalBrightness_CheckedChanged(object? sender, EventArgs e)
@@ -885,6 +911,263 @@ namespace GHelper
         private void panelAPU_Paint(object sender, PaintEventArgs e)
         {
 
+        }
+
+        // Arrange the Auto Mode controls using the current panel size
+        private void LayoutProcessAutoControls()
+        {
+            int colLeft = 10;
+            int colWidth = Math.Max(200, panelProcessAuto.ClientSize.Width - 40);
+            int row = 35;
+            int gap = 10;
+
+            // Title
+            labelProcessAuto.AutoSize = true;
+            labelProcessAuto.Left = colLeft;
+            labelProcessAuto.Top = 8;
+
+            // Keep the enable checkbox aligned to the right of the title on resize, vertically centered with it
+            checkProcessAutoEnable.Left = Math.Max(colLeft, panelProcessAuto.ClientSize.Width - checkProcessAutoEnable.Width - 20);
+            checkProcessAutoEnable.Top = labelProcessAuto.Top + Math.Max(0, (labelProcessAuto.Height - checkProcessAutoEnable.Height) / 2);
+
+            // Start content below the title with extra spacing to avoid overlap
+            row = labelProcessAuto.Bottom + gap + 6;
+
+            labelProcSilent.Left = colLeft;
+            labelProcSilent.Top = row;
+            row += labelProcSilent.Height + 2;
+            textProcSilent.Left = colLeft;
+            textProcSilent.Top = row;
+            textProcSilent.Width = colWidth;
+            row += textProcSilent.Height + gap;
+
+            labelProcPerf.Left = colLeft;
+            labelProcPerf.Top = row;
+            row += labelProcPerf.Height + 2;
+            textProcPerf.Left = colLeft;
+            textProcPerf.Top = row;
+            textProcPerf.Width = colWidth;
+            row += textProcPerf.Height + gap;
+
+            labelProcTurbo.Left = colLeft;
+            labelProcTurbo.Top = row;
+            row += labelProcTurbo.Height + 2;
+            textProcTurbo.Left = colLeft;
+            textProcTurbo.Top = row;
+            textProcTurbo.Width = colWidth;
+            row += textProcTurbo.Height + gap;
+
+            buttonProcDefaults.Left = colLeft;
+            buttonProcDefaults.Top = row;
+            // Auto-size buttons to fit text with generous padding; then equalize heights
+            buttonProcDefaults.AutoSize = true;
+            buttonProcDefaults.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            buttonProcDefaults.Padding = new Padding(18, 10, 18, 10);
+            buttonProcDefaults.Size = buttonProcDefaults.PreferredSize;
+
+            buttonProcSave.AutoSize = true;
+            buttonProcSave.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            buttonProcSave.Padding = new Padding(18, 10, 18, 10);
+            buttonProcSave.Size = buttonProcSave.PreferredSize;
+
+            // Make both buttons the same taller height
+            int btnHeight = Math.Max(buttonProcDefaults.Height, buttonProcSave.Height);
+            buttonProcDefaults.Height = btnHeight;
+            buttonProcSave.Height = btnHeight;
+
+            // Align the Save button to the right edge of the content column
+            buttonProcSave.Left = Math.Max(colLeft, colLeft + colWidth - buttonProcSave.Width);
+            buttonProcSave.Top = row;
+
+            panelProcessAuto.Height = row + buttonProcSave.Height + 20;
+
+            // If hosted as a standalone window, ensure the form is tall enough to fit content
+            try
+            {
+                var screen = Screen.FromControl(this);
+                int desiredHeight = panelProcessAuto.Height + 20;
+                int maxHeight = Math.Max(300, screen.WorkingArea.Height - 80);
+                if (this.ClientSize.Height < desiredHeight)
+                {
+                    this.ClientSize = new Size(this.ClientSize.Width, Math.Min(desiredHeight, maxHeight));
+                }
+            }
+            catch { }
+        }
+
+        // ========== Process-based Auto Mode (UI + persistence) ==========
+        private void InitProcessAutoPanel()
+        {
+            // Panel styling (dock with the rest of stacked sections)
+            panelProcessAuto.Padding = new Padding(10);
+            panelProcessAuto.BorderStyle = BorderStyle.FixedSingle;
+            panelProcessAuto.Dock = DockStyle.Top;
+            panelProcessAuto.AutoScroll = true;
+
+            // Title and enable
+            labelProcessAuto.Text = "Auto mode (by process)";
+            labelProcessAuto.AutoSize = true;
+            labelProcessAuto.Left = 10;
+            labelProcessAuto.Top = 10;
+
+            checkProcessAutoEnable.Text = "Enable";
+            checkProcessAutoEnable.AutoSize = true;
+            checkProcessAutoEnable.Left = 700; // will be adjusted by layout on resize
+            checkProcessAutoEnable.Top = 8;
+
+            // Labels
+            labelProcSilent.Text = "Silent patterns";
+            labelProcPerf.Text = "Performance patterns";
+            labelProcTurbo.Text = "Turbo patterns";
+            labelProcSilent.AutoSize = labelProcPerf.AutoSize = labelProcTurbo.AutoSize = true;
+
+            // Text areas
+            void SetupBox(TextBox tb)
+            {
+                tb.Multiline = true;
+                tb.ScrollBars = ScrollBars.None;
+                tb.Height = 120;
+                tb.Font = new Font(tb.Font.FontFamily, 9.0f);
+                tb.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top;
+            }
+            SetupBox(textProcSilent);
+            SetupBox(textProcPerf);
+            SetupBox(textProcTurbo);
+
+            // Buttons
+            buttonProcSave.Text = "Save"; // Save & Apply
+            buttonProcDefaults.Text = "Factory Defaults";
+
+            // Perform layout after panel has a valid size
+            LayoutProcessAutoControls();
+
+            // Add controls
+            panelProcessAuto.Controls.Add(labelProcessAuto);
+            panelProcessAuto.Controls.Add(checkProcessAutoEnable);
+            panelProcessAuto.Controls.Add(labelProcSilent);
+            panelProcessAuto.Controls.Add(textProcSilent);
+            panelProcessAuto.Controls.Add(labelProcPerf);
+            panelProcessAuto.Controls.Add(textProcPerf);
+            panelProcessAuto.Controls.Add(labelProcTurbo);
+            panelProcessAuto.Controls.Add(textProcTurbo);
+            panelProcessAuto.Controls.Add(buttonProcDefaults);
+            panelProcessAuto.Controls.Add(buttonProcSave);
+
+            // Add to form and place before panelPower to keep it visible near bottom but above Services
+            this.Controls.Add(panelProcessAuto);
+            try
+            {
+                this.Controls.SetChildIndex(panelProcessAuto, this.Controls.GetChildIndex(panelPower));
+            }
+            catch { }
+
+            // Wire events
+            buttonProcSave.Click += ButtonProcSave_Click;
+            buttonProcDefaults.Click += ButtonProcDefaults_Click;
+            panelProcessAuto.Resize += (s, e) => LayoutProcessAutoControls();
+
+            // Load state
+            LoadProcessAutoConfig();
+        }
+
+        // Normalize multi-line / comma / semicolon-delimited patterns into newline-separated unique list
+        private static string NormalizePatterns(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+            var parts = input
+                .Replace('\r', '\n')
+                .Replace(';', '\n')
+                .Replace(',', '\n')
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return string.Join(Environment.NewLine, parts);
+        }
+
+        private void LoadProcessAutoConfig()
+        {
+            checkProcessAutoEnable.Checked = AppConfig.Is("process_map_enabled");
+            textProcSilent.Text = NormalizePatterns(AppConfig.GetString("process_map_silent") ?? string.Empty);
+            textProcPerf.Text = NormalizePatterns(AppConfig.GetString("process_map_performance") ?? string.Empty);
+            textProcTurbo.Text = NormalizePatterns(AppConfig.GetString("process_map_turbo") ?? string.Empty);
+        }
+
+        private void ButtonProcSave_Click(object? sender, EventArgs e)
+        {
+            SaveProcessAutoConfig();
+        }
+
+        private void ButtonProcDefaults_Click(object? sender, EventArgs e)
+        {
+            // Factory Defaults: clear patterns and disable
+            checkProcessAutoEnable.Checked = false;
+            textProcSilent.Text = string.Empty;
+            textProcPerf.Text = string.Empty;
+            textProcTurbo.Text = string.Empty;
+            SaveProcessAutoConfig("Process Rules Reset to Factory Settings");
+        }
+
+        private void SaveProcessAutoConfig(string? toastMessage = null)
+        {
+            AppConfig.Set("process_map_enabled", checkProcessAutoEnable.Checked ? 1 : 0);
+            AppConfig.Set("process_map_silent", NormalizePatterns(textProcSilent.Text));
+            AppConfig.Set("process_map_performance", NormalizePatterns(textProcPerf.Text));
+            AppConfig.Set("process_map_turbo", NormalizePatterns(textProcTurbo.Text));
+
+            Logger.WriteLine("Process Auto Mode saved:");
+            Logger.WriteLine($" enabled={checkProcessAutoEnable.Checked}");
+            Logger.WriteLine($" silent=[{textProcSilent.Text.Replace('\n', ';')}] ");
+            Logger.WriteLine($" performance=[{textProcPerf.Text.Replace('\n', ';')}] ");
+            Logger.WriteLine($" turbo=[{textProcTurbo.Text.Replace('\n', ';')}] ");
+
+            // Hook for live reload (service to be implemented later)
+            try { Type.GetType("GHelper.ProcessModeService")?.GetMethod("ReloadMappings")?.Invoke(null, null); } catch { }
+            Program.toast.RunToast(toastMessage ?? "Process rules saved", ToastIcon.BrightnessUp);
+        }
+
+        // Display only the Process Auto panel and hide everything else for a minimal UI
+        public void ShowOnlyProcessAuto()
+        {
+            try
+            {
+                // Hide all other controls
+                foreach (Control c in this.Controls)
+                {
+                    if (!ReferenceEquals(c, panelProcessAuto)) c.Visible = false;
+                }
+
+                panelProcessAuto.Visible = true;
+                Text = "Auto mode";
+
+                // Start with a generous size and enforce minimums
+                this.MinimumSize = new Size(900, 650);
+                this.ClientSize = new Size(Math.Max(this.ClientSize.Width, 1000), Math.Max(this.ClientSize.Height, 750));
+
+                // Fill the window and compute layout, then expand height if needed
+                panelProcessAuto.Dock = DockStyle.Fill;
+                panelProcessAuto.AutoScroll = false; // avoid inner scrollbars in standalone mode
+                LayoutProcessAutoControls();
+                panelProcessAuto.BringToFront();
+
+                // If content still exceeds screen height, allow scrolling as a fallback
+                try
+                {
+                    var screen = Screen.FromControl(this);
+                    int desiredHeight = panelProcessAuto.Height + 20;
+                    int maxHeight = screen.WorkingArea.Height - 80;
+                    if (desiredHeight > maxHeight)
+                    {
+                        this.ClientSize = new Size(this.ClientSize.Width, maxHeight);
+                        panelProcessAuto.AutoScroll = true;
+                    }
+                }
+                catch { }
+            }
+            catch { }
+
+            if (!Visible) Show();
+            Activate();
+            BringToFront();
         }
     }
 }

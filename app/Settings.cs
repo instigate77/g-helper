@@ -92,7 +92,7 @@ namespace GHelper
             buttonMatrix.Text = Properties.Strings.PictureGif;
             buttonQuit.Text = Properties.Strings.Quit;
             buttonUpdates.Text = Properties.Strings.Updates;
-            buttonDonate.Text = Properties.Strings.Donate;
+            buttonDonate.Text = "Auto Mode";
 
             buttonController.Text = Properties.Strings.Controller;
             labelAlly.Text = Properties.Strings.AllyController;
@@ -269,13 +269,7 @@ namespace GHelper
 
             buttonDonate.Click += ButtonDonate_Click;
 
-            int click = AppConfig.Get("donate_click");
-            int startCount = AppConfig.Get("start_count");
-            if (startCount >= ((click < 10) ? 10 : click + 50))
-            {
-                buttonDonate.BorderColor = colorTurbo;
-                buttonDonate.Badge = Math.Clamp((startCount - click) / 50, 1, 9);
-            }
+            // Removed donate badge logic; the button now opens Auto Mode settings.
 
             labelBacklight.ForeColor = colorStandard;
             labelBacklight.Click += LabelBacklight_Click;
@@ -292,9 +286,13 @@ namespace GHelper
 
         private void ButtonDonate_Click(object? sender, EventArgs e)
         {
-            AppConfig.Set("donate_click", AppConfig.Get("start_count"));
-            buttonDonate.Badge = 0;
-            Process.Start(new ProcessStartInfo("https://g-helper.com/support") { UseShellExecute = true });
+            if (extraForm == null || extraForm.Text == "")
+            {
+                extraForm = new Extra();
+                AddOwnedForm(extraForm);
+            }
+
+            extraForm.ShowOnlyProcessAuto();
         }
 
         private void LabelBacklight_Click(object? sender, EventArgs e)

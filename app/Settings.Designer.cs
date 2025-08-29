@@ -1,4 +1,4 @@
-﻿using GHelper.UI;
+using GHelper.UI;
 
 namespace GHelper
 {
@@ -505,7 +505,7 @@ namespace GHelper
             buttonDonate.Secondary = true;
             buttonDonate.Size = new Size(254, 48);
             buttonDonate.TabIndex = 3;
-            buttonDonate.Text = "&Donate";
+            buttonDonate.Text = "&Auto Mode";
             buttonDonate.TextImageRelation = TextImageRelation.ImageBeforeText;
             buttonDonate.UseVisualStyleBackColor = false;
             // 
