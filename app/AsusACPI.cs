@@ -25,6 +25,13 @@ public enum AsusGPU
     Ultimate = 2
 }
 
+public enum PerfMode
+{
+    Balanced,
+    Turbo,
+    Silent
+}
+
 public class AsusACPI
 {
 
@@ -868,5 +875,18 @@ public class AsusACPI
         }
     }
 
+    public static void SetPerformanceMode(PerfMode mode)
+    {
+        const uint PERFORMANCE_MODE_CMD = 0x00120075;
 
+        int modeValue = mode switch
+        {
+            PerfMode.Balanced => 1,
+            PerfMode.Turbo => 2,
+            PerfMode.Silent => 3,
+            _ => 1
+        };
+
+        Program.acpi.DeviceSet(PERFORMANCE_MODE_CMD, modeValue, $"Set Performance Mode to {mode}");
+    }
 }

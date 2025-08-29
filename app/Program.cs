@@ -44,6 +44,31 @@ namespace GHelper
         public static void Main(string[] args)
         {
 
+            // CLI: g-helper.exe -mode turbo|performance|silent
+            if (args.Length == 2 && args[0].Equals("-mode", StringComparison.OrdinalIgnoreCase))
+            {
+                var modeArg = args[1].ToLower();
+                PerfMode mode;
+                switch (modeArg)
+                {
+                    case "turbo":
+                        mode = PerfMode.Turbo;
+                        break;
+                    case "performance":
+                        mode = PerfMode.Balanced;
+                        break;
+                    case "silent":
+                        mode = PerfMode.Silent;
+                        break;
+                    default:
+                        Console.WriteLine("Invalid mode. Use: turbo, performance, or silent.");
+                        return;
+                }
+                AsusACPI.SetPerformanceMode(mode);
+                Console.WriteLine($"Set mode to {modeArg}.");
+                return; // Exit after setting mode
+            }
+
             string action = "";
             if (args.Length > 0) action = args[0];
 
