@@ -1,0 +1,19 @@
+{
+  "defaultMode": "silent",
+  "pollIntervalMs": 3000,
+  "stabilizeMs": 4000,
+  "log": true,
+  "gHelperPath": "C:\\Tools\\bin\\GHelper.exe",
+  "mappings": [
+    {
+      "mode": "turbo",
+      "priority": 100,
+      "processes": ["FiveM_b*_GTA*", "FXServer*"]
+    },
+    {
+      "mode": "performance",
+      "priority": 50,
+      "processes": ["Code", "Windsurf*"]
+    }
+  ]
+}

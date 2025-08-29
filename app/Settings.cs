@@ -1,4 +1,4 @@
-﻿using GHelper.Ally;
+using GHelper.Ally;
 using GHelper.AnimeMatrix;
 using GHelper.AutoUpdate;
 using GHelper.Battery;
@@ -1529,6 +1529,7 @@ namespace GHelper
 
         protected void VisualiseMode(int mode)
         {
+            Logger.WriteLine($"VisualiseMode invoked: mode={mode}");
             buttonSilent.Activated = false;
             buttonBalanced.Activated = false;
             buttonTurbo.Activated = false;
@@ -1754,6 +1755,7 @@ namespace GHelper
 
         public void VisualiseIcon()
         {
+            Logger.WriteLine($"VisualiseIcon invoked: gpu_mode={AppConfig.Get("gpu_mode")}, dark={CheckSystemDarkModeStatus()}, bw_icon={AppConfig.IsBWIcon()}");
             if (Program.trayIcon is null) return;
             int GPUMode = AppConfig.Get("gpu_mode");
             bool isDark = CheckSystemDarkModeStatus();
