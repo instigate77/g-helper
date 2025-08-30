@@ -829,9 +829,9 @@ namespace GHelper
                 SetContextMenu();
             };
             contextMenuStrip.Items.Add(miniOverlayToggle);
-
+            
             // Separator and Quit item
-            contextMenuStrip.Items.Add("-");
+            contextMenuStrip.Items.Add(new ToolStripSeparator());
             var quitItem = new ToolStripMenuItem(Properties.Strings.Quit)
             {
                 Margin = padding
