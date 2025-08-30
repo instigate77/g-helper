@@ -16,6 +16,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using System.Text;
 using static NativeMethods;
+using GHelper.UI;
 
 namespace GHelper
 {
@@ -33,6 +34,8 @@ namespace GHelper
         public static ClamshellModeControl clamshellControl = new ClamshellModeControl();
 
         public static ToastForm toast = new ToastForm();
+
+        public static MiniOverlay? miniOverlay;
 
         public static IntPtr unRegPowerNotify, unRegPowerNotifyLid;
 
@@ -154,6 +157,18 @@ namespace GHelper
 
             SetAutoModes(init: true);
 
+            // Show Mini Mode overlay if enabled
+            if (AppConfig.Is("mini_overlay"))
+            {
+                try
+                {
+                    miniOverlay = new MiniOverlay();
+                    miniOverlay.Show();
+                    UpdateMiniOverlay();
+                }
+                catch { }
+            }
+
             // Subscribing for system power change events
             SystemEvents.PowerModeChanged += SystemEvents_PowerModeChanged;
             SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
@@ -227,6 +242,17 @@ namespace GHelper
 
             Application.Run();
 
+        }
+
+        public static void UpdateMiniOverlay()
+        {
+            try
+            {
+                if (miniOverlay is null) return;
+                if (!miniOverlay.Visible) return;
+                miniOverlay.SetText($"{Properties.Strings.PerformanceMode}: {Modes.GetCurrentName()}");
+            }
+            catch { }
         }
 
 
@@ -409,6 +435,9 @@ namespace GHelper
                 trayIcon.Visible = false;
                 trayIcon.Dispose();
             }
+
+            // Hide Mini overlay
+            try { miniOverlay?.Hide(); miniOverlay?.Dispose(); } catch { }
 
             // Stop IPC listener
             StopIPCListener();
@@ -594,12 +623,14 @@ namespace GHelper
                     {
                         modeControl.SetPerformanceMode(modeIndex, true);
                         settingsForm.VisualiseIcon();
+                        UpdateMiniOverlay();
                     }));
                 }
                 else
                 {
                     modeControl.SetPerformanceMode(modeIndex, true);
                     settingsForm.VisualiseIcon();
+                    UpdateMiniOverlay();
                 }
 
                 Logger.WriteLine($"Successfully set mode to {modeArg}");

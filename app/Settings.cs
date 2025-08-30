@@ -795,16 +795,49 @@ namespace GHelper
                 menuOptimized = new ToolStripMenuItem(Properties.Strings.Optimized);
                 menuOptimized.Click += ButtonOptimized_Click;
                 menuOptimized.Margin = padding;
-                contextMenuStrip.Items.Add(menuOptimized);
-
-                contextMenuStrip.Items.Add("-");
             }
 
+            // Mini Mode overlay toggle
+            contextMenuStrip.Items.Add("-");
+            var miniOverlayToggle = new ToolStripMenuItem("Mini Mode Overlay")
+            {
+                Margin = padding,
+                Checked = AppConfig.Is("mini_overlay")
+            };
+            miniOverlayToggle.Click += (s, e) =>
+            {
+                bool enable = !AppConfig.Is("mini_overlay");
+                AppConfig.Set("mini_overlay", enable ? 1 : 0);
+                try
+                {
+                    if (enable)
+                    {
+                        if (Program.miniOverlay == null || Program.miniOverlay.IsDisposed)
+                        {
+                            Program.miniOverlay = new MiniOverlay();
+                        }
+                        Program.miniOverlay.Show();
+                        Program.UpdateMiniOverlay();
+                    }
+                    else
+                    {
+                        Program.miniOverlay?.Hide();
+                    }
+                }
+                catch { }
+                // refresh the context menu check state
+                SetContextMenu();
+            };
+            contextMenuStrip.Items.Add(miniOverlayToggle);
 
-            var quit = new ToolStripMenuItem(Properties.Strings.Quit);
-            quit.Click += ButtonQuit_Click;
-            quit.Margin = padding;
-            contextMenuStrip.Items.Add(quit);
+            // Separator and Quit item
+            contextMenuStrip.Items.Add("-");
+            var quitItem = new ToolStripMenuItem(Properties.Strings.Quit)
+            {
+                Margin = padding
+            };
+            quitItem.Click += ButtonQuit_Click;
+            contextMenuStrip.Items.Add(quitItem);
 
             //contextMenuStrip.ShowCheckMargin = true;
             contextMenuStrip.RenderMode = ToolStripRenderMode.System;
@@ -1480,7 +1513,10 @@ namespace GHelper
                 gpuTemp = $": {HardwareControl.gpuTemp}°C";
             }
 
-            string trayTip = "CPU" + cpuTemp + " " + HardwareControl.cpuFan;
+            // Add current performance mode as the first line of the tray tooltip
+            string modeName = Modes.GetCurrentName();
+            string trayTip = $"{Properties.Strings.PerformanceMode}: {modeName}";
+            trayTip += "\n" + ("CPU" + cpuTemp + " " + HardwareControl.cpuFan);
             if (gpuTemp.Length > 0) trayTip += "\nGPU" + gpuTemp + " " + HardwareControl.gpuFan;
             if (battery.Length > 0) trayTip += "\n" + battery;
 
@@ -1775,16 +1811,19 @@ namespace GHelper
         private void ButtonSilent_Click(object? sender, EventArgs e)
         {
             Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceSilent);
+            Program.UpdateMiniOverlay();
         }
 
         private void ButtonBalanced_Click(object? sender, EventArgs e)
         {
             Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceBalanced);
+            Program.UpdateMiniOverlay();
         }
 
         private void ButtonTurbo_Click(object? sender, EventArgs e)
         {
             Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceTurbo);
+            Program.UpdateMiniOverlay();
         }
 
 

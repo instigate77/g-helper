@@ -1,4 +1,4 @@
-﻿using GHelper.Gpu.NVidia;
+using GHelper.Gpu.NVidia;
 using GHelper.Helpers;
 using GHelper.USB;
 using Ryzen;
@@ -75,6 +75,9 @@ namespace GHelper.Mode
             settings.ShowMode(mode);
 
             Modes.SetCurrent(mode);
+
+            // Ensure Mini Overlay reflects the new mode immediately
+            Program.UpdateMiniOverlay();
 
 
             Task.Run(async () =>
