@@ -37,6 +37,8 @@ namespace GHelper
                     int initialTarget = ComputeTargetModeIndex();
                     if (_lastAppliedModeIndex != initialTarget)
                     {
+                        // Mark as auto before applying
+                        AppConfig.Set("mode_manual", 0);
                         Program.modeControl.SetPerformanceMode(initialTarget, true);
                         _lastAppliedModeIndex = initialTarget;
                     }
@@ -63,6 +65,7 @@ namespace GHelper
 
                             if (_lastAppliedModeIndex != target)
                             {
+                                AppConfig.Set("mode_manual", 0);
                                 Program.modeControl.SetPerformanceMode(target, true);
                                 _lastAppliedModeIndex = target;
                             }

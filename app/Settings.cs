@@ -39,6 +39,9 @@ namespace GHelper
         public Updates? updatesForm;
         public Handheld? handheldForm;
 
+        // Backing text for custom-drawn performance mode label (to color only [A]/[M])
+        private string _modeLabelText = "";
+
         static long lastRefresh;
         static long lastBatteryRefresh;
         static long lastLostFocus;
@@ -276,6 +279,14 @@ namespace GHelper
 
             panelPerformance.Focus();
             InitVisual();
+
+            // We'll render the label text into an image so the [A]/[M] prefix can be colored reliably
+            labelPerf.Visible = true;
+            labelPerf.AutoSize = false;
+            labelPerf.TextAlign = ContentAlignment.MiddleLeft;
+            labelPerf.ImageAlign = ContentAlignment.MiddleLeft;
+            labelPerf.Text = string.Empty;
+            labelPerf.BringToFront();
         }
 
         private void LabelBattery_Click(object? sender, EventArgs e)
@@ -1606,19 +1617,95 @@ namespace GHelper
             {
                 Invoke(delegate
                 {
-                    labelPerf.Text = modeText;
-                    panelPerformance.AccessibleName = labelPerf.Text;
+                    bool isManual = AppConfig.Get("mode_manual") == 1;
+                    string prefix = isManual ? "[M] " : "[A] ";
+                    _modeLabelText = Properties.Strings.PerformanceMode + ": " + prefix + modeText.Replace(Properties.Strings.PerformanceMode + ": ", "");
+                    panelPerformance.AccessibleName = _modeLabelText;
+                    // Render to image with colored prefix and assign to label
+                    labelPerf.Image?.Dispose();
+                    labelPerf.Image = RenderModeLabelBitmap(_modeLabelText, isManual);
+                    // Size label to image width/height, keep height stable
+                    labelPerf.Width = labelPerf.Image.Width;
+                    labelPerf.Height = Math.Max(labelPerf.Height, labelPerf.Image.Height);
                 });
             }
             else
             {
-                labelPerf.Text = modeText;
-                panelPerformance.AccessibleName = labelPerf.Text;
+                bool isManual = AppConfig.Get("mode_manual") == 1;
+                string prefix = isManual ? "[M] " : "[A] ";
+                _modeLabelText = Properties.Strings.PerformanceMode + ": " + prefix + modeText.Replace(Properties.Strings.PerformanceMode + ": ", "");
+                panelPerformance.AccessibleName = _modeLabelText;
+                labelPerf.Image?.Dispose();
+                labelPerf.Image = RenderModeLabelBitmap(_modeLabelText, isManual);
+                labelPerf.Width = labelPerf.Image.Width;
+                labelPerf.Height = Math.Max(labelPerf.Height, labelPerf.Image.Height);
+                labelPerf.BringToFront();
+                labelPerf.Visible = true;
             }
 
         }
 
+        private void LabelPerf_Paint(object? sender, PaintEventArgs e)
+        {
+            // No-op; we render via labelPerf.Image to avoid theme/paint ordering issues
+        }
 
+        private Bitmap RenderModeLabelBitmap(string text, bool isManual)
+        {
+            // Compute parts
+            int bStart = text.IndexOf('[');
+            int bEnd = (bStart >= 0) ? text.IndexOf(']', bStart + 1) : -1;
+            string before = text;
+            string tag = string.Empty;
+            string after = string.Empty;
+            if (bStart >= 0 && bEnd > bStart)
+            {
+                before = text.Substring(0, bStart);
+                tag = text.Substring(bStart, bEnd - bStart + 1);
+                if (bEnd + 1 < text.Length && text[bEnd + 1] == ' ')
+                {
+                    tag += " ";
+                    after = (bEnd + 2 <= text.Length) ? text.Substring(bEnd + 2) : string.Empty;
+                }
+                else
+                {
+                    after = (bEnd + 1 < text.Length) ? text.Substring(bEnd + 1) : string.Empty;
+                }
+            }
+
+            // Measure sizes
+            var tf = TextFormatFlags.NoPadding;
+            Size szBefore = TextRenderer.MeasureText(before, labelPerf.Font, new Size(int.MaxValue, int.MaxValue), tf);
+            Size szTag = TextRenderer.MeasureText(tag, labelPerf.Font, new Size(int.MaxValue, int.MaxValue), tf);
+            Size szAfter = TextRenderer.MeasureText(after, labelPerf.Font, new Size(int.MaxValue, int.MaxValue), tf);
+            int width = Math.Max(1, szBefore.Width + szTag.Width + szAfter.Width);
+            int height = Math.Max(1, Math.Max(szBefore.Height, Math.Max(szTag.Height, szAfter.Height)));
+
+            Bitmap bmp = new Bitmap(width, height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using (Graphics g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.Transparent);
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+                int x = 0;
+                int y = 0;
+                if (!string.IsNullOrEmpty(before))
+                {
+                    TextRenderer.DrawText(g, before, labelPerf.Font, new Point(x, y), Color.White, tf);
+                    x += szBefore.Width;
+                }
+                if (!string.IsNullOrEmpty(tag))
+                {
+                    Color prefixColor = isManual ? Color.Red : Color.LimeGreen;
+                    TextRenderer.DrawText(g, tag, labelPerf.Font, new Point(x, y), prefixColor, tf);
+                    x += szTag.Width;
+                }
+                if (!string.IsNullOrEmpty(after))
+                {
+                    TextRenderer.DrawText(g, after, labelPerf.Font, new Point(x, y), Color.White, tf);
+                }
+            }
+            return bmp;
+        }
 
         public void VisualizeXGM(int GPUMode = -1)
         {
@@ -1810,18 +1897,21 @@ namespace GHelper
 
         private void ButtonSilent_Click(object? sender, EventArgs e)
         {
+            AppConfig.Set("mode_manual", 1);
             Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceSilent);
             Program.UpdateMiniOverlay();
         }
 
         private void ButtonBalanced_Click(object? sender, EventArgs e)
         {
+            AppConfig.Set("mode_manual", 1);
             Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceBalanced);
             Program.UpdateMiniOverlay();
         }
 
         private void ButtonTurbo_Click(object? sender, EventArgs e)
         {
+            AppConfig.Set("mode_manual", 1);
             Program.modeControl.SetPerformanceMode(AsusACPI.PerformanceTurbo);
             Program.UpdateMiniOverlay();
         }

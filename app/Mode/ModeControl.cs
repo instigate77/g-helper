@@ -42,9 +42,16 @@ namespace GHelper.Mode
             int mode = AppConfig.Get("performance_" + (int)Plugged);
 
             if (mode != -1)
+            {
+                // This is an automatic selection -> clear manual flag
+                AppConfig.Set("mode_manual", 0);
                 SetPerformanceMode(mode, powerChanged);
+            }
             else
+            {
+                AppConfig.Set("mode_manual", 0);
                 SetPerformanceMode(Modes.GetCurrent());
+            }
         }
 
 
@@ -154,11 +161,14 @@ namespace GHelper.Mode
 
                 modeToggleTimer.Stop();
                 modeToggleTimer.Start();
+                // User initiated toggle -> set manual flag
+                AppConfig.Set("mode_manual", 1);
                 Modes.SetCurrent(Modes.GetNext(back));
                 Toast();
             }
             else
             {
+                AppConfig.Set("mode_manual", 1);
                 SetPerformanceMode(Modes.GetNext(back), true);
             }
 

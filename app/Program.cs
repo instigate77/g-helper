@@ -250,7 +250,9 @@ namespace GHelper
             {
                 if (miniOverlay is null) return;
                 if (!miniOverlay.Visible) return;
-                miniOverlay.SetText($"{Properties.Strings.PerformanceMode}: {Modes.GetCurrentName()}");
+                bool isManual = AppConfig.Get("mode_manual") == 1;
+                string prefix = isManual ? "[M] " : "[A] ";
+                miniOverlay.SetText($"{Properties.Strings.PerformanceMode}: {prefix}{Modes.GetCurrentName()}");
             }
             catch { }
         }
@@ -612,6 +614,9 @@ namespace GHelper
                         Logger.WriteLine($"Invalid mode: {modeArg}");
                         return false;
                 }
+
+                // This is a manual override via IPC
+                AppConfig.Set("mode_manual", 1);
 
                 // Set the performance mode using ACPI
                 AsusACPI.SetPerformanceMode(mode);
