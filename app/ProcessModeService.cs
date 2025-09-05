@@ -31,6 +31,21 @@ namespace GHelper
                 _cts = new CancellationTokenSource();
                 var token = _cts.Token;
 
+                // Apply once immediately so startup mode reflects running processes
+                try
+                {
+                    int initialTarget = ComputeTargetModeIndex();
+                    if (_lastAppliedModeIndex != initialTarget)
+                    {
+                        Program.modeControl.SetPerformanceMode(initialTarget, true);
+                        _lastAppliedModeIndex = initialTarget;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("ProcessModeService initial apply error: " + ex.Message);
+                }
+
                 _loopTask = Task.Run(async () =>
                 {
                     while (!token.IsCancellationRequested)
@@ -44,15 +59,12 @@ namespace GHelper
                                 continue;
                             }
 
-                            int? target = GetTargetModeIndex();
+                            int target = ComputeTargetModeIndex();
 
-                            if (target.HasValue)
+                            if (_lastAppliedModeIndex != target)
                             {
-                                if (_lastAppliedModeIndex != target.Value)
-                                {
-                                    Program.modeControl.SetPerformanceMode(target.Value, true);
-                                    _lastAppliedModeIndex = target.Value;
-                                }
+                                Program.modeControl.SetPerformanceMode(target, true);
+                                _lastAppliedModeIndex = target;
                             }
 
                             await Task.Delay(1500, token);
@@ -126,9 +138,10 @@ namespace GHelper
             return list;
         }
 
-        // Returns target mode index if any match. Priority: Turbo > Performance > Silent
+        // Compute target mode index deterministically. Priority: Turbo > Performance > Silent
         // Mode indices follow Program.HandleModeCommand usage: performance=0, turbo=1, silent=2
-        private static int? GetTargetModeIndex()
+        // Fallback: if nothing matches any list, ALWAYS choose Silent (2) since it's the lowest mode.
+        private static int ComputeTargetModeIndex()
         {
             try
             {
@@ -142,15 +155,37 @@ namespace GHelper
                     catch { }
                 }
 
-                if (MatchesAny(names, _turbo)) return 1;       // Turbo
-                if (MatchesAny(names, _perf)) return 0;        // Performance/Balanced
-                if (MatchesAny(names, _silent)) return 2;      // Silent
+                bool verbose = AppConfig.Is("process_map_verbose");
+
+                var turboMatch = FindFirstMatch(names, _turbo);
+                if (turboMatch is not null)
+                {
+                    if (verbose) Logger.WriteLine($"ProcessModeService: Turbo match '{turboMatch}' -> Turbo (1)");
+                    return 1; // Turbo
+                }
+
+                var perfMatch = FindFirstMatch(names, _perf);
+                if (perfMatch is not null)
+                {
+                    if (verbose) Logger.WriteLine($"ProcessModeService: Perf match '{perfMatch}' -> Performance (0)");
+                    return 0; // Performance/Balanced
+                }
+
+                var silentMatch = FindFirstMatch(names, _silent);
+                if (silentMatch is not null)
+                {
+                    if (verbose) Logger.WriteLine($"ProcessModeService: Silent match '{silentMatch}' -> Silent (2)");
+                    return 2; // Silent
+                }
             }
             catch (Exception ex)
             {
                 Logger.WriteLine("ProcessModeService scan error: " + ex.Message);
             }
-            return null;
+
+            // Fallback selection when no process lists match: Always Silent
+            if (AppConfig.Is("process_map_verbose")) Logger.WriteLine("ProcessModeService: No matches -> Fallback to Silent (2)");
+            return 2;
         }
 
         private static bool MatchesAny(HashSet<string> names, List<Regex> patterns)
@@ -164,6 +199,20 @@ namespace GHelper
                 }
             }
             return false;
+        }
+
+        // Helper: find the first process name that matches any of the given patterns
+        private static string? FindFirstMatch(HashSet<string> names, List<Regex> patterns)
+        {
+            if (patterns.Count == 0) return null;
+            foreach (var name in names)
+            {
+                foreach (var rx in patterns)
+                {
+                    try { if (rx.IsMatch(name)) return name; } catch { }
+                }
+            }
+            return null;
         }
     }
 }
