@@ -1,4 +1,4 @@
-# ProcessModeTrayWatcher.ps1
+n# ProcessModeTrayWatcher.ps1
 # Tray-based process watcher that sets G-Helper mode via IPC
 # - Tray menu: Reload Config, Open Config, Toggle Logging, Quit
 # - Auto-reloads when config file changes
