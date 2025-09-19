@@ -654,7 +654,7 @@ namespace GHelper
                 VisualizeXGM();
 
                 Task.Run((Action)RefreshPeripheralsBattery);
-                updateControl.CheckForUpdates();
+                // App update checks are disabled.
             }
         }
 
@@ -888,7 +888,7 @@ namespace GHelper
 
         private void LabelVersion_Click(object? sender, EventArgs e)
         {
-            updateControl.LoadReleases();
+            // Disabled: do nothing on version label click.
         }
 
 
